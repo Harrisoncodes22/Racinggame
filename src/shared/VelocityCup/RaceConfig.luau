@@ -21,7 +21,7 @@ Config.TRACK_LENGTH_SCALE = 1.15  -- slightly longer laps
 Config.HUB_POSITION = {0, 4000, 0}  -- the server room floats high above the tracks
 Config.LEADERBOARD_SIZE = 50
 Config.START_COINS = 350
-Config.PLACE_COINS = {150, 120, 100, 80, 65, 55, 45, 40}
+Config.FIRST_PLACE_COINS = 150  -- the winner gets this; each place below gets a bit less, last place gets 0
 Config.HIT_COINS = 10
 
 -- ---------------------------------------------------------------- vehicles
@@ -258,6 +258,13 @@ function Config.robuxItems()
 		if t.robux then t.shopKind = "trail"; list[#list + 1] = t end
 	end
 	return list
+end
+-- coins for finishing in `place` out of `field` racers: an even step down from
+-- FIRST_PLACE_COINS for the winner to 0 for last place (8 racers: 150, 129, 107, 86, 64, 43, 21, 0)
+function Config.placeCoins(place, field)
+	if field <= 1 then return Config.FIRST_PLACE_COINS end
+	local share = (field - place) / (field - 1)
+	return math.floor(Config.FIRST_PLACE_COINS * math.clamp(share, 0, 1) + 0.5)
 end
 -- vehicles anyone can drive (and bots use)
 function Config.freeVehicles()

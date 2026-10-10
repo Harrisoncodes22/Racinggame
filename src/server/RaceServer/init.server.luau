@@ -651,7 +651,8 @@ local function runRace(s)
 
 	local raceTime = os.clock() - raceStart
 	local out = {}
-	for i, r in ipairs(standingsOf(s)) do
+	local standings = standingsOf(s)
+	for i, r in ipairs(standings) do
 		local t, projected = r.finishTime, false
 		if not r.finished then
 			local remain = (LAPS * N - r.total) * tr.seg
@@ -665,7 +666,7 @@ local function runRace(s)
 		local coins = 0
 		if r.player and r.player.Parent then
 			-- no place coins for parking on the grid: you have to finish at least one lap
-			local placeCoins = (r.finished or r.lapsDone >= 1) and (Config.PLACE_COINS[i] or 30) or 0
+			local placeCoins = (r.finished or r.lapsDone >= 1) and Config.placeCoins(i, #standings) or 0
 			coins = placeCoins + (r.hits or 0) * Config.HIT_COINS
 			Data.addCoins(r.player, coins)
 			task.spawn(Data.save, r.player)

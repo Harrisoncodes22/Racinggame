@@ -35,7 +35,7 @@ Change a number, play-test, repeat. Colours are `{r, g, b}` 0–255.
 | Setting | Now |
 |---|---|
 | `START_COINS` | 350 |
-| `PLACE_COINS` | 150, 120, 100, 80, 65, 55, 45, 40 |
+| `FIRST_PLACE_COINS` | 150 — winner's coins; each place below gets an even step less, last place 0 (8 racers: 150, 129, 107, 86, 64, 43, 21, 0) |
 | `HIT_COINS` | 10 |
 | `SKINS[].price`, `TRAILS[].price` | 150–1000 |
 | `SPIN_TIERS[].chance` | weights (see [[Monetization]]) |

@@ -20,7 +20,7 @@ Back to [[Home]]
 `Config.UNLOCK_ROBUX_VEHICLES_IN_STUDIO = true` lets you test Robux vehicles in Studio for free (never saved, never in live servers).
 
 ## Coins
-Earned from race places (`PLACE_COINS`, needs ≥ 1 lap) and item hits. Spent on skins (300–1000) and trails (150–800). New players start with `START_COINS` = 350.
+Earned from race places (`Config.placeCoins`: winner gets `FIRST_PLACE_COINS`, last place 0; needs ≥ 1 lap) and item hits. Spent on skins (300–1000) and trails (150–800). New players start with `START_COINS` = 350.
 
 ## Daily spin
 Free, once per UTC day. Real odds (the spin screen now shows these, rounded):

@@ -29,7 +29,7 @@ stateDiagram-v2
 
 ## Results & coins
 - Unfinished racers get a *projected* time (marked `*`).
-- Coins: `PLACE_COINS[place]` + `HIT_COINS` per item hit. **Place coins need at least one completed lap** (no AFK farming).
+- Coins: `Config.placeCoins(place, racers)` — the winner gets `FIRST_PLACE_COINS` (150), each place below an even step less, **last place gets 0** — plus `HIT_COINS` per item hit. **Place coins need at least one completed lap** (no AFK farming).
 
 ## Edge cases handled
 - A player whose character is dead at the start, or who can't be seated, is sent back to the hub instead of being stuck in a race they're not in.
