@@ -1,0 +1,17 @@
+{
+  "name": "VelocityCup",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "VelocityCup": { "$path": "src/shared/VelocityCup" }
+    },
+    "ServerScriptService": {
+      "RaceServer": { "$path": "src/server/RaceServer" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "RaceClient": { "$path": "src/client/RaceClient" }
+      }
+    }
+  }
+}
