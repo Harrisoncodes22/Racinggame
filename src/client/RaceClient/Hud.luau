@@ -263,6 +263,7 @@ function Hud.create(gui, State)
 	end
 
 	function self.setWrongWay(v) wrongLabel.Visible = v end
+	function self.setResetHint(text) wrongLabel.Text = "WRONG WAY  ·  " .. text end
 	return self
 end
 

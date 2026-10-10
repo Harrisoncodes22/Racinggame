@@ -54,7 +54,9 @@ local sessionConns = {}
 local carsFolder = nil
 local myModel, st, tr, trackDef = nil, nil, nil, nil
 local pads, padInfo = {}, {}
-local steerIn, driftHeld, wrongT, farT = 0, false, 0, 0
+local steerIn, driftHeld, wrongT = 0, false, 0
+local lastReset = -math.huge
+local RESET_COOLDOWN = 3 -- seconds between manual resets (stops reset-spamming through the track)
 local driving = false
 local isTouch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -80,6 +82,7 @@ end
 
 local function resetCar()
 	if st and tr then
+		lastReset = os.clock()
 		C.recover(st, tr, 2)
 		hud.toast("Back on track")
 	end
@@ -101,7 +104,13 @@ local function onItem(_, s)
 	return Enum.ContextActionResult.Sink
 end
 local function onReset(_, s)
-	if s == Enum.UserInputState.Begin and phaseIs("Race") then resetCar() end
+	if s == Enum.UserInputState.Begin and phaseIs("Race") and st and st.freezeT <= 0 then
+		if os.clock() - lastReset < RESET_COOLDOWN then
+			hud.toast("Wait a moment before resetting again")
+		else
+			resetCar()
+		end
+	end
 	return Enum.ContextActionResult.Sink
 end
 
@@ -118,7 +127,8 @@ local function startDriving(model)
 	gatherTrack()
 	hud.setTrack(tr)
 	driving = true
-	steerIn, driftHeld, wrongT, farT = 0, false, 0, 0
+	steerIn, driftHeld, wrongT = 0, false, 0
+	lastReset = -math.huge
 	local pri = Enum.ContextActionPriority.High.Value
 	ContextActionService:BindActionAtPriority("VCDrift", onDrift, true, pri, Enum.KeyCode.Space, Enum.KeyCode.ButtonR1, Enum.KeyCode.ButtonL1)
 	ContextActionService:BindActionAtPriority("VCItem", onItem, true, pri, Enum.KeyCode.E, Enum.KeyCode.F, Enum.KeyCode.ButtonX)
@@ -133,6 +143,7 @@ local function startDriving(model)
 	if hum then hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false) end
 	camera.CameraType = Enum.CameraType.Scriptable
 	hud.hint(not isTouch)
+	hud.setResetHint(isTouch and "TAP RESET" or (UserInputService.GamepadEnabled and not UserInputService.KeyboardEnabled and "PRESS Y TO RESET") or "PRESS R TO RESET")
 	hud.show(true)
 end
 

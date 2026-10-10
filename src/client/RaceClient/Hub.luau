@@ -363,8 +363,6 @@ function Hub.create(gui, remotes, HubState)
 	end
 	player:GetAttributeChangedSignal("Room"):Connect(self.refreshRoom)
 
-	-- ---------- shop + leaderboard (shared with earlier versions) ----------
-	local State = nil
 	-- ---------- shop ----------
 	local shop = UI.panel({ Parent = gui, Name = "Shop", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(760, 520), Visible = false, BackgroundTransparency = 0.04, ZIndex = 5 })
 	UI.pad(18).Parent = shop
@@ -569,9 +567,14 @@ function Hub.create(gui, remotes, HubState)
 	make("Frame", { Parent = spinP, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, 84), Size = UDim2.fromOffset(26, 26), BackgroundColor3 = UI.YELLOW, Rotation = 45, ZIndex = 9 }, { UI.stroke(Color3.new(0, 0, 0), 2) })
 	local spinGo = button({ Parent = wheel, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(120, 120), Text = "SPIN!", TextSize = 26, ZIndex = 10 })
 	spinGo:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 60)
+	-- chances in RaceConfig are weights, so show each one as its real percentage
 	local oddsText = {}
+	local weightSum = 0
+	for _, t in ipairs(Config.SPIN_TIERS) do weightSum = weightSum + t.chance end
 	for _, t in ipairs(Config.SPIN_TIERS) do
-		oddsText[#oddsText + 1] = '<font color="#' .. string.format("%02X%02X%02X", t.color[1], t.color[2], t.color[3]) .. '">' .. t.name .. " " .. t.chance .. "%</font>"
+		local pct = t.chance / weightSum * 100
+		local pctText = (pct >= 1) and string.format("%.0f", pct) or string.format("%.1f", pct)
+		oddsText[#oddsText + 1] = '<font color="#' .. string.format("%02X%02X%02X", t.color[1], t.color[2], t.color[3]) .. '">' .. t.name .. " " .. pctText .. "%</font>"
 	end
 	label({ Parent = spinP, Text = table.concat(oddsText, "   "), RichText = true, TextSize = 13, Position = UDim2.fromOffset(0, 458), Size = UDim2.new(1, 0, 0, 18), ZIndex = 5 })
 	local prizeText = {}

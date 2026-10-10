@@ -85,6 +85,16 @@ local function validTrack(id)
 	for _, t in ipairs(Config.TRACKS) do if t.id == id then return true end end
 	return false
 end
+-- simple per-player rate limit for remotes that cost the server real work
+local lastCall = {}
+local function throttled(plr, key, gap)
+	local t = lastCall[plr]
+	if not t then t = {}; lastCall[plr] = t end
+	local now = os.clock()
+	if t[key] and now - t[key] < gap then return true end
+	t[key] = now
+	return false
+end
 local function teleport(plr, cf)
 	local char = plr.Character
 	if char and char.PrimaryPart then char:PivotTo(cf) end
@@ -210,7 +220,7 @@ R.CreateRoom.OnServerEvent:Connect(function(plr, trackId)
 	if type(trackId) == "string" then createRoom(plr, trackId) end
 end)
 R.JoinRoom.OnServerEvent:Connect(function(plr, k)
-	if type(k) == "number" then joinRoom(plr, k) end
+	if type(k) == "number" and k == math.floor(k) and k >= 1 and k <= Config.MAX_ROOMS then joinRoom(plr, k) end
 end)
 R.LeaveRoom.OnServerEvent:Connect(function(plr) leaveRoom(plr, false) end)
 R.RoomReady.OnServerEvent:Connect(function(plr, ready)
@@ -249,6 +259,7 @@ R.RoomStart.OnServerEvent:Connect(function(plr)
 	startSession(members, room.track, room.fillBots, room)
 end)
 R.Shop.OnServerInvoke = function(plr, action, kind, id)
+	if throttled(plr, "shop", 0.25) then return false, "Slow down a little" end
 	if type(kind) ~= "string" or type(id) ~= "string" then return false, "Bad request" end
 	if kind ~= "skin" and kind ~= "trail" then return false, "Bad request" end
 	if action == "buy" then return Data.buy(plr, kind, id) end
@@ -256,9 +267,11 @@ R.Shop.OnServerInvoke = function(plr, action, kind, id)
 	return false, "Bad request"
 end
 R.DailySpin.OnServerInvoke = function(plr)
+	if throttled(plr, "spin", 1) then return { ok = false, msg = "Slow down a little" } end
 	return Data.spin(plr)
 end
-R.GetLeaderboard.OnServerInvoke = function(_, trackId)
+R.GetLeaderboard.OnServerInvoke = function(plr, trackId)
+	if throttled(plr, "board", 0.5) then return {} end
 	if type(trackId) ~= "string" or not validTrack(trackId) then return {} end
 	return Data.getBoard(trackId)
 end
@@ -344,7 +357,12 @@ local function runRace(s)
 	local humans = {}
 	for _, plr in ipairs(s.players) do
 		local hum = plr.Parent and plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
-		if hum and hum.Health > 0 then humans[#humans + 1] = plr end
+		if hum and hum.Health > 0 then
+			humans[#humans + 1] = plr
+		elseif plr.Parent then
+			-- no living character to put in a car: send them back instead of leaving them stuck
+			plr:SetAttribute("Session", nil)
+		end
 	end
 	local total = s.fillBots and Config.MAX_RACERS or #humans
 	total = math.max(total, #humans)
@@ -396,7 +414,15 @@ local function runRace(s)
 		}
 		if plr then
 			model:SetAttribute("OwnerUserId", plr.UserId)
-			if not seatPlayer(r) then removeRacer(r) end
+			-- anti-cheat: the player's own device runs their car's physics, so the server
+			-- only lets lap progress grow as fast as this vehicle could possibly drive
+			r.maxSpeed = vdef.top * K * (Config.SPEED_SCALE or 1) * 1.38 * 1.25 -- boosted top speed + margin for corner-cutting
+			r.allow = r.maxSpeed * 0.5
+			if not seatPlayer(r) then
+				removeRacer(r)
+				plr:SetAttribute("Session", nil)
+				task.spawn(function() plr:LoadCharacter() end)
+			end
 			if seat then
 				seat:GetPropertyChangedSignal("Occupant"):Connect(function()
 					if seat.Occupant == nil and not r.gone then
@@ -519,6 +545,24 @@ local function runRace(s)
 				local idx = res.idx
 				local d = idx - r.lastIdx
 				if d < -N / 2 then d = d + N elseif d > N / 2 then d = d - N end
+				if r.maxSpeed then
+					-- speed budget (refills over time, so bursty network updates are fine)
+					r.allow = math.min(r.allow + r.maxSpeed * dt, r.maxSpeed * 2.5)
+					if d > 0 then
+						local ratio = res.route and res.route.mainPerStud or 1
+						local cost = d * tr.seg / ratio
+						if cost > r.allow then
+							local kept = math.floor(r.allow * ratio / tr.seg)
+							if not r.flagged and (d - kept) * tr.seg > 120 then
+								r.flagged = true
+								warn(("Velocity Cup: %s moved faster than their vehicle allows (ignored)"):format(r.name))
+							end
+							d = kept
+							cost = d * tr.seg / ratio
+						end
+						r.allow = r.allow - cost
+					end
+				end
 				if math.abs(d) < 150 then r.total = r.total + d end
 				r.lastIdx = idx
 				r.idx = idx
@@ -620,7 +664,9 @@ local function runRace(s)
 		end
 		local coins = 0
 		if r.player and r.player.Parent then
-			coins = (Config.PLACE_COINS[i] or 30) + (r.hits or 0) * Config.HIT_COINS
+			-- no place coins for parking on the grid: you have to finish at least one lap
+			local placeCoins = (r.finished or r.lapsDone >= 1) and (Config.PLACE_COINS[i] or 30) or 0
+			coins = placeCoins + (r.hits or 0) * Config.HIT_COINS
 			Data.addCoins(r.player, coins)
 			task.spawn(Data.save, r.player)
 		end
@@ -757,6 +803,7 @@ Players.PlayerRemoving:Connect(function(plr)
 			if r.player == plr then removeRacer(r) end
 		end
 	end
+	lastCall[plr] = nil
 	Data.release(plr)
 end)
 

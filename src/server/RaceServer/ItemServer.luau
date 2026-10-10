@@ -122,6 +122,29 @@ function Factory.new()
 		end
 	end
 
+	-- moves a projectile dist studs along the road it is on: the side route it was fired
+	-- on (if any) and then the main line. Returns position, direction, side vector, road width.
+	local function advance(p, dist)
+		local tr = ctx.tr
+		local r = p.route
+		if r then
+			p.j = p.j + dist / (r.length / math.max(1, r.M - 1))
+			if p.j < r.M then
+				local j0 = math.max(1, math.floor(p.j))
+				local j1 = math.min(r.M, j0 + 1)
+				local a, b = r.P[j0], r.P[j1]
+				p.f = TrackMath.routeToMain(tr, r, j0)
+				return a + (b - a) * (p.j - j0), r.T[j0], r.S[j0], r.W
+			end
+			-- reached the end of the route: carry on along the main road
+			p.route = nil
+			p.f = r.to
+		end
+		p.f = p.f + dist / tr.seg
+		local pt, t, s = TrackMath.pointAt(tr, p.f)
+		return pt, t, s, tr.W
+	end
+
 	local function forwardOf(r)
 		local lv = r.body.CFrame.LookVector
 		local f = Vector3.new(lv.X, 0, lv.Z)
@@ -136,7 +159,6 @@ function Factory.new()
 		local id = r.item
 		r.item = nil
 		if r.model then r.model:SetAttribute("Item", nil) end
-		local tr = ctx.tr
 		local pos = r.body.Position
 		if id == "boost" then
 			ctx.applyBoost(r, Config.ITEMS.boost.duration)
@@ -144,7 +166,7 @@ function Factory.new()
 			local part = newPart({ Name = "Boomerang", Size = Vector3.new(4.5, 0.5, 1.4), Color = rgb(Config.ITEMS.boomerang.color), Material = Enum.Material.Neon, CFrame = CFrame.new(pos + UP * 2.5) })
 			local wing = newPart({ Name = "BoomerangWing", Size = Vector3.new(1.4, 0.5, 4.5), Color = rgb(Config.ITEMS.boomerang.color), Material = Enum.Material.Neon, CFrame = part.CFrame * CFrame.new(-1.55, 0, 1.55) })
 			wing.Parent = part
-			projectiles[#projectiles + 1] = { kind = "boomerang", owner = r, part = part, wing = wing, f = r.idx or 1, lat = math.clamp(r.lat or 0, -tr.W / 2 + 4, tr.W / 2 - 4), t = 0, out = true, pos = pos + UP * 2.5, hits = {}, nhits = 0 }
+			projectiles[#projectiles + 1] = { kind = "boomerang", owner = r, part = part, wing = wing, f = r.idx or 1, route = r.route, j = r.j or 1, lat = r.lat or 0, t = 0, out = true, pos = pos + UP * 2.5, hits = {}, nhits = 0 }
 		elseif id == "rocket" then
 			local list = ctx.standings()
 			local place = table.find(list, r) or 1
@@ -158,7 +180,7 @@ function Factory.new()
 			fire.Size = 4
 			fire.Heat = 0
 			fire.Parent = part
-			projectiles[#projectiles + 1] = { kind = "rocket", owner = r, target = target, part = part, f = r.idx or 1, lat = r.lat or 0, t = 0, pos = pos + UP * 3 }
+			projectiles[#projectiles + 1] = { kind = "rocket", owner = r, target = target, part = part, f = r.idx or 1, route = r.route, j = r.j or 1, lat = r.lat or 0, t = 0, pos = pos + UP * 3, dir = forwardOf(r) }
 			if target then ctx.notify(target, "ROCKET INCOMING!") end
 		elseif id == "storm" then
 			-- a storm cloud over every other racer: lightning stuns them all
@@ -222,9 +244,8 @@ function Factory.new()
 				p.t = p.t + dt
 				if p.kind == "boomerang" then
 					if p.out then
-						p.f = p.f + 280 * dt / tr.seg
-						local pt, _, s = TrackMath.pointAt(tr, p.f)
-						p.pos = pt + s * p.lat + UP * 2.5
+						local pt, _, s, w = advance(p, 280 * dt)
+						p.pos = pt + s * math.clamp(p.lat, -w / 2 + 4, w / 2 - 4) + UP * 2.5
 						if p.t > 1.4 then p.out = false end
 					else
 						local o = p.owner
@@ -253,12 +274,13 @@ function Factory.new()
 						local ahead = ((tg.idx or 1) - p.f) % tr.N
 						if (tp - p.pos).Magnitude < 70 or ahead < 12 or ahead > tr.N - 40 then
 							local d = tp - p.pos
+							if d.Magnitude > 0.01 then p.dir = d.Unit end
 							p.pos = p.pos + d.Unit * math.min(d.Magnitude, speed * dt)
 						else
-							p.f = p.f + speed * dt / tr.seg
 							p.lat = p.lat + ((tg.lat or 0) - p.lat) * math.min(1, dt * 2)
-							local pt, _, s = TrackMath.pointAt(tr, p.f)
-							p.pos = pt + s * math.clamp(p.lat, -tr.W / 2, tr.W / 2) + UP * 3
+							local pt, tdir, s, w = advance(p, speed * dt)
+							p.dir = tdir
+							p.pos = pt + s * math.clamp(p.lat, -w / 2, w / 2) + UP * 3
 						end
 						if (tp - p.pos).Magnitude < 9 then
 							boom(p.pos, 10)
@@ -266,31 +288,30 @@ function Factory.new()
 							p.dead = true
 						end
 					else
-						p.f = p.f + speed * dt / tr.seg
-						local pt, _, s = TrackMath.pointAt(tr, p.f)
-						p.pos = pt + s * p.lat + UP * 3
+						local pt, tdir, s, w = advance(p, speed * dt)
+						p.dir = tdir
+						p.pos = pt + s * math.clamp(p.lat, -w / 2, w / 2) + UP * 3
 						if p.t > 3 then boom(p.pos, 10); p.dead = true end
 					end
-					local _, tdir = TrackMath.pointAt(tr, p.f)
-					p.part.CFrame = CFrame.lookAt(p.pos, p.pos + tdir) * CFrame.Angles(0, math.pi / 2, 0)
+					p.part.CFrame = CFrame.lookAt(p.pos, p.pos + p.dir) * CFrame.Angles(0, math.pi / 2, 0)
 					if p.t > 9 then boom(p.pos, 10); p.dead = true end
 				elseif p.kind == "storm" then
-				for _, v in ipairs(p.victims) do
-					if v.r.body.Parent then
-						local pos = v.r.body.Position
-						v.cloud.CFrame = CFrame.new(pos + UP * 14)
-						for _, ch in ipairs(v.cloud:GetChildren()) do
-							if ch.Name == "Puff" then ch.CFrame = v.cloud.CFrame * CFrame.new(ch:GetAttribute("Offset") or Vector3.new()) end
+					for _, v in ipairs(p.victims) do
+						if v.r.body.Parent then
+							local pos = v.r.body.Position
+							v.cloud.CFrame = CFrame.new(pos + UP * 14)
+							for _, ch in ipairs(v.cloud:GetChildren()) do
+								if ch.Name == "Puff" then ch.CFrame = v.cloud.CFrame * CFrame.new(ch:GetAttribute("Offset") or Vector3.new()) end
+							end
+							v.bolt.CFrame = CFrame.new(pos + UP * 7) * CFrame.Angles(0, p.t * 9, math.sin(p.t * 30) * 0.2)
+							v.bolt.Transparency = (math.floor(p.t * 12) % 3 == 0) and 0.8 or 0
 						end
-						v.bolt.CFrame = CFrame.new(pos + UP * 7) * CFrame.Angles(0, p.t * 9, math.sin(p.t * 30) * 0.2)
-						v.bolt.Transparency = (math.floor(p.t * 12) % 3 == 0) and 0.8 or 0
 					end
-				end
-				if p.t > Config.ITEMS.storm.stun then
-					for _, v in ipairs(p.victims) do v.cloud:Destroy() end
-					p.dead = true
-				end
-			elseif p.kind == "bomb" then
+					if p.t > Config.ITEMS.storm.stun then
+						for _, v in ipairs(p.victims) do v.cloud:Destroy() end
+						p.dead = true
+					end
+				elseif p.kind == "bomb" then
 					p.fuse.Transparency = (math.floor(p.t * 6) % 2 == 0) and 0 or 0.7
 					if p.t > 0.6 then
 						for _, r in ipairs(racers) do

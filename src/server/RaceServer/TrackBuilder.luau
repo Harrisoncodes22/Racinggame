@@ -263,7 +263,7 @@ function TrackBuilder.build(def, tr, folderName)
 			-- stone archways at both ends, hidden behind hanging vines
 			for _, fj in ipairs({ 0.1, 0.9 }) do
 				local j = math.floor(r.M * fj)
-				local p, t, sd = r.P[j], r.T[j], r.S[j]
+				local p, t = r.P[j], r.T[j]
 				local cf = CFrame.lookAt(p, p + t)
 				for _, s in ipairs({ -1, 1 }) do
 					part({ Name = "ArchPillar", Size = Vector3.new(5, 22, 5), CFrame = cf * CFrame.new(s * (r.W / 2 + 4), 11, 0), Color = Color3.fromRGB(120, 112, 96), Material = Enum.Material.Cobblestone }, roadF)

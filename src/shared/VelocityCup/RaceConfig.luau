@@ -215,7 +215,6 @@ for _, t in ipairs(Config.TRACKS) do
 	for _, g in ipairs(t.gaps or {}) do g[2] = g[2] * l end
 end
 
--- surfaces: how much they cap top speed (before the vehicle's off-road skill helps)
 -- ---------------------------------------------------------------- daily spin
 -- One free spin per day (resets at midnight UTC). Chances are weights, so they don't
 -- have to add up to 100. If you win a skin you already own, you get coins instead.
@@ -233,6 +232,7 @@ function Config.spinTier(id)
 	return Config.SPIN_TIERS[1]
 end
 
+-- surfaces: how much they cap top speed (before the vehicle's off-road skill helps)
 Config.SURFACES = {
 	Road = 1, Ramp = 1, Ice = 1, Dirt = 0.8, Water = 0.45,
 }

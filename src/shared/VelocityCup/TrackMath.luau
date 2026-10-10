@@ -172,11 +172,24 @@ function TrackMath.build(def, K, N, offset)
 		local rT, rS = tangents(rP, false)
 		local W = r.W or math.floor(def.W * 0.7)
 		local SHr = r.SH or 6
+		local span = (b - a) % N
+		-- bounding box (padded by the road half-width) so locateAll can skip far-away routes cheaply
+		local bx0, bx1, bz0, bz1 = math.huge, -math.huge, math.huge, -math.huge
+		for j = 1, #rP do
+			local p = rP[j]
+			bx0 = math.min(bx0, p.X); bx1 = math.max(bx1, p.X)
+			bz0 = math.min(bz0, p.Z); bz1 = math.max(bz1, p.Z)
+		end
+		local pad = W / 2 + SHr + 12
 		tr.routes[ri] = {
 			id = ri, name = r.name or ("Route " .. ri), kind = r.kind or "shortcut",
 			surface = r.surface or "Road",
 			P = rP, T = rT, S = rS, M = #rP, length = rLen,
-			from = a, to = b, span = (b - a) % N,
+			from = a, to = b, span = span,
+			-- lap distance gained per stud driven on this route (above 1 on a shortcut).
+			-- The server's anti-cheat speed check uses it.
+			mainPerStud = math.max(1, span * (total / N) / math.max(rLen, 1)),
+			box = { x0 = bx0 - pad, x1 = bx1 + pad, z0 = bz0 - pad, z1 = bz1 + pad },
 			W = W, SH = SHr, HALF = W / 2 + SHr,
 			pads = r.pads or {}, boxes = r.boxes or {}, open = r.open, cave = r.cave,
 		}
@@ -231,9 +244,13 @@ end
 -- nearest point on the main line or any route.
 -- Returns a table: idx (main-line equivalent), lat, T (direction), route (or nil), j (route sample)
 function TrackMath.locateAll(tr, pos, hint, routeHint, jHint)
-	local idx, lat, along, d2 = TrackMath.locate(tr, pos, hint)
+	local idx, lat, _, d2 = TrackMath.locate(tr, pos, hint)
 	local res = { idx = idx, lat = lat, T = tr.T[idx], route = nil, j = nil, d2 = d2 }
 	for _, r in ipairs(tr.routes) do
+		local bx = r.box
+		if bx and (pos.X < bx.x0 or pos.X > bx.x1 or pos.Z < bx.z0 or pos.Z > bx.z1) then
+			continue -- nowhere near this route
+		end
 		local best, bj = math.huge, 1
 		local lo, hi, step = 1, r.M, 1
 		if r == routeHint and jHint then
